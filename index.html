@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messages Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .message-card {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .message-header {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .message-content {
+            white-space: pre-wrap;
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .reply-form {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+        .reply-input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .reply-button {
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .reply-button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div id="messages-container"></div>
+
+    <script>
+        let receivedMessages = [];  // Store all received messages
+
+        // Function to create a message element
+        function createMessageElement(message) {
+            console.log("Creating message element: ", message);  // Inspect message content in the console
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message-card';
+            
+              // Ensure message.exactDate is in UTC
+    const date = new Date(message.exactDate);
+    
+    // Adjusting for GMT+5 (Asia/Karachi)
+    const gmtPlus5Date = new Date(date.getTime() + (5 * 60 * 60 * 1000)); // Add 5 hours in milliseconds
+
+    // Format the new date in the desired format
+    const formattedDate = gmtPlus5Date.toLocaleString('en-US', {
+        hour12: false,  // 24-hour format
+    });
+            
+            messageDiv.innerHTML = `
+                <div class="message-header">
+                    <div><strong>Conversation ID:</strong> ${message.conversation_id}</div>
+                    <div><strong>Received Date and Time:</strong> ${formattedDate}</div>
+                    <div><strong>Guest Name:</strong> ${message.recipientName}</div>
+                </div>
+                <div class="message-content">
+                    <strong>Received Message:</strong>
+                    <div>${message.body}</div>
+                </div>
+                <div class="reply-form">
+                    <input type="text" class="reply-input" placeholder="Type your reply...">
+                    <button class="reply-button" onclick="sendReply('${message.conversation_id}', '${message.chatwoot_conversation_id}', this)">
+                        Send Reply
+                    </button>
+                </div>
+            `;
+            
+            return messageDiv;
+        }
+
+        // Function to fetch messages once and store them
+        async function fetchMessages() {
+            try {
+                const response = await fetch('/messages');
+                const data = await response.json();
+                console.log("Data received from server: ", data);  // Inspect received data
+
+                if (data.todaysMessages && data.todaysMessages.length > 0) {
+                    receivedMessages = data.todaysMessages;  // Store the messages dynamically
+                    renderMessages();  // Initial render of messages
+                } else {
+                    document.getElementById('messages-container').innerHTML = '<p>No messages found.</p>';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        // Function to render the messages to the page dynamically
+        function renderMessages() {
+            const container = document.getElementById('messages-container');
+            container.innerHTML = '';  // Clear existing messages
+
+            // Render each message
+            receivedMessages.forEach(message => {
+                container.appendChild(createMessageElement(message));
+            });
+        }
+
+        // Function to send a reply
+        async function sendReply(hostwayConversationId, chatwootConversationId, button) {
+            const input = button.previousElementSibling;
+            const message = input.value.trim();
+            
+            if (!message) return;  // Do nothing if the message is empty
+            
+            try {
+                const response = await fetch('/reply', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        hostwayConversationId,
+                        chatwootConversationId,
+                        message
+                    })
+                });
+                
+                const data = await response.json();
+                console.log("Reply sent: ", data);  // Inspect the reply response
+                
+                if (data.success) {
+                    input.value = '';  // Clear the input field after reply is sent
+                    alert('Reply sent successfully!');
+
+                    // After reply is sent, simulate the new received message
+                    // This is where new received message is dynamically added.
+                    const newMessage = {
+                        conversation_id: hostwayConversationId,
+                        chatwoot_conversation_id: chatwootConversationId,
+                        exactDate: new Date(),
+                        recipientName: 'New Guest',  // This can be dynamic based on the response
+                        body: 'This is a new message after reply',  // This would be replaced with actual response data
+                    };
+                    
+                    // Dynamically add the new message
+                    receivedMessages.push(newMessage);  // Add the new message to the array
+                    renderMessages();  // Re-render with the new message added
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to send reply');
+            }
+        }
+
+        // Initial fetch of messages
+        fetchMessages();
+        
+
+    </script>
+</body>
+</html>
